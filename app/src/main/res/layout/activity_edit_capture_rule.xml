@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        tools:context=".EditCaptureRuleActivity">
+
+        <TextView
+            android:id="@+id/textViewNameLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="规则名称"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+        <EditText
+            android:id="@+id/editTextRuleName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="例如：检测对话框"
+            android:inputType="text"
+            android:autofillHints=""
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/textViewNameLabel" />
+        <TextView
+            android:id="@+id/textViewAreaLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="捕获区域 (X, Y, 宽, 高)"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/editTextRuleName" />
+        <LinearLayout
+            android:id="@+id/linearLayoutArea"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/textViewAreaLabel">
+            <EditText android:id="@+id/editTextX" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:hint="X" android:inputType="number" android:autofillHints="" />
+            <EditText android:id="@+id/editTextY" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:hint="Y" android:inputType="number" android:autofillHints="" />
+            <EditText android:id="@+id/editTextWidth" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:hint="宽度" android:inputType="number" android:autofillHints="" />
+            <EditText android:id="@+id/editTextHeight" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:hint="高度" android:inputType="number" android:autofillHints="" />
+        </LinearLayout>
+        <TextView
+            android:id="@+id/textViewImageLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="匹配图片 (App内置)"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/linearLayoutArea" />
+        <Spinner
+            android:id="@+id/spinnerMatchImage"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minHeight="48dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/textViewImageLabel" />
+        <TextView
+            android:id="@+id/textViewThresholdLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="匹配度阈值 (0.0 - 1.0)"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/spinnerMatchImage" />
+        <EditText
+            android:id="@+id/editTextThreshold"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="例如: 0.9"
+            android:inputType="numberDecimal"
+            android:autofillHints=""
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/textViewThresholdLabel" />
+
+        <Button
+            android:id="@+id/btnPreviewCaptureArea"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="预览捕获区域"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/editTextThreshold" />
+
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="保存规则"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/btnPreviewCaptureArea" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>
