@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <!-- 半透明的红色填充 -->
+    <solid android:color="#40FF0000"/>
+
+    <!-- 2dp宽度的红色实线边框 -->
+    <stroke android:width="2dp" android:color="#FFFF0000"/>
+
+</shape>
