@@ -2,30 +2,33 @@ package com.example.ffxivmtoiletroll
 import android.graphics.Rect
 import java.util.UUID
 
-// (已修改) 移除了 previewCaptureArea 字段
 data class CaptureRule(
     val id: String = UUID.randomUUID().toString(),
     var name: String,
     var captureArea: Rect,
-    var matchImageResId: Int,
+    // (已修改) 使用 ResourceIdentifier 代替 Int
+    var matchImage: ResourceIdentifier,
     var matchThreshold: Double = 0.9
 )
 
-// --- 以下数据类保持不变 ---
+
 data class Condition(
     val captureRuleId: String,
     var isMet: Boolean = true
 )
 enum class LogicOperator { AND, OR }
+
 data class ShowImageAction(
     val id: String = UUID.randomUUID().toString(),
-    val imageResId: Int,
+    // (已修改) 使用 ResourceIdentifier 代替 Int
+    val image: ResourceIdentifier,
     val positionX: Int,
     val positionY: Int
 )
 data class PlaySoundAction(
     val id: String = UUID.randomUUID().toString(),
-    val soundResId: Int
+    // (已修改) 使用 ResourceIdentifier 代替 Int
+    val sound: ResourceIdentifier
 )
 sealed class Action {
     data class ShowImage(val details: ShowImageAction) : Action()
@@ -42,4 +45,14 @@ data class AppConfig(
     val captureRules: List<CaptureRule>,
     val actionRules: List<ActionRule>,
     val detectionInterval: Long
+)
+
+enum class ResourceType {
+    BUILT_IN, // 内置资源
+    USER // 用户导入的资源
+}
+
+data class ResourceIdentifier(
+    val type: ResourceType,
+    val path: String // 对于内置资源，这是资源名；对于用户资源，这是文件名
 )

@@ -14,6 +14,8 @@ class FloatingWindowManager(private val context: Context) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val views = mutableMapOf<String, View>()
     private val TAG = "FloatingWindowManager"
+    // (新增) 持有 ResourceManager 实例，用于加载图片
+    private val resourceManager = ResourceManager(context)
 
     private fun createLayoutParams(x: Int, y: Int, width: Int, height: Int): WindowManager.LayoutParams {
         val layoutFlag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -59,18 +61,29 @@ class FloatingWindowManager(private val context: Context) {
         }
     }
 
-    fun showImage(id: String, resId: Int, x: Int, y: Int) {
+    /**
+     * 在屏幕上显示一张图片
+     * @param id 视图的唯一ID
+     * @param imageIdentifier 图片资源的唯一标识
+     * @param x X坐标
+     * @param y Y坐标
+     */
+    fun showImage(id: String, imageIdentifier: ResourceIdentifier, x: Int, y: Int) {
+        // (已修改) 使用 ResourceManager 加载图片
+        val bitmap = resourceManager.loadBitmap(imageIdentifier)
+        if (bitmap == null) {
+            Log.e(TAG, "Failed to load bitmap for identifier: $imageIdentifier")
+            return
+        }
         val imageView = ImageView(context)
-        imageView.setImageResource(resId)
+        imageView.setImageBitmap(bitmap)
         val params = createLayoutParams(x, y, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)
         addView(id, imageView, params)
     }
 
     fun showPreviewArea(id: String, area: Rect) {
         val previewView = View(context)
-        // (已修改) 使用XML Drawable资源来设置背景，更稳定
         previewView.setBackgroundResource(R.drawable.preview_border)
-
         val params = createLayoutParams(area.left, area.top, area.width(), area.height())
         addView(id, previewView, params)
     }

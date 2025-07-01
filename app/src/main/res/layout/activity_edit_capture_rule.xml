@@ -15,9 +15,11 @@
             android:id="@+id/textViewNameLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
             android:text="规则名称"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent" />
+
         <EditText
             android:id="@+id/editTextRuleName"
             android:layout_width="0dp"
@@ -56,18 +58,42 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="匹配图片 (App内置)"
+            android:text="匹配图片"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/linearLayoutArea" />
-        <Spinner
-            android:id="@+id/spinnerMatchImage"
+
+        <!-- (已修改) 将 Spinner 和 Button 放在一个 ConstraintLayout 中 -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/matchImageContainer"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:minHeight="48dp"
-            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/textViewImageLabel"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/textViewImageLabel" />
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <Spinner
+                android:id="@+id/spinnerMatchImage"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:minHeight="48dp"
+                app:layout_constraintEnd_toStartOf="@+id/btnImportMatchImage"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                android:layout_marginEnd="8dp"/>
+
+            <Button
+                android:id="@+id/btnImportMatchImage"
+                style="@style/Widget.AppCompat.Button.Small"
+                android:layout_width="wrap_content"
+                android:layout_height="0dp"
+                android:text="导入"
+                app:layout_constraintBottom_toBottomOf="@id/spinnerMatchImage"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="@id/spinnerMatchImage" />
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
         <TextView
             android:id="@+id/textViewThresholdLabel"
             android:layout_width="wrap_content"
@@ -75,7 +101,7 @@
             android:layout_marginTop="16dp"
             android:text="匹配度阈值 (0.0 - 1.0)"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toBottomOf="@id/spinnerMatchImage" />
+            app:layout_constraintTop_toBottomOf="@id/matchImageContainer" />
         <EditText
             android:id="@+id/editTextThreshold"
             android:layout_width="0dp"

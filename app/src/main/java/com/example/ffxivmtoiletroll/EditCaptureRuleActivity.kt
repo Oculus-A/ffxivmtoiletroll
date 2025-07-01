@@ -1,13 +1,14 @@
 package com.example.ffxivmtoiletroll
 import android.content.Intent
 import android.graphics.Rect
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.widget.ArrayAdapter
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import com.example.ffxivmtoiletroll.R
 import com.example.ffxivmtoiletroll.databinding.ActivityEditCaptureRuleBinding
 import java.util.UUID
 
@@ -16,10 +17,34 @@ class EditCaptureRuleActivity : AppCompatActivity() {
     private lateinit var binding: ActivityEditCaptureRuleBinding
     private lateinit var repository: RuleRepository
     private var currentRuleId: String? = null
-    private lateinit var matchImageResources: List<Pair<String, String>>
+
+    // (新增) 资源管理器
+    private lateinit var resourceManager: ResourceManager
+    // (已修改) 存储资源标识符列表
+    private lateinit var matchImageResources: List<ResourceIdentifier>
     private lateinit var imageSpinnerAdapter: ArrayAdapter<String>
 
     private lateinit var floatingWindowManager: FloatingWindowManager
+
+    // (新增) 文件选择器启动器
+    private val importImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let {
+            val fileName = resourceManager.importResource(it, "image")
+            if (fileName != null) {
+                showToast("图片导入成功: $fileName")
+                // 导入成功后刷新 Spinner
+                setupImageSpinner()
+                // 自动选中刚刚导入的图片
+                val newIdentifier = ResourceIdentifier(ResourceType.USER, fileName)
+                val position = matchImageResources.indexOf(newIdentifier)
+                if (position != -1) {
+                    binding.spinnerMatchImage.setSelection(position)
+                }
+            } else {
+                showToast("图片导入失败")
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,6 +52,7 @@ class EditCaptureRuleActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         repository = RuleRepository(this)
+        resourceManager = ResourceManager(this) // 初始化
         floatingWindowManager = FloatingWindowManager(this)
 
         currentRuleId = intent.getStringExtra(EXTRA_RULE_ID)
@@ -40,24 +66,32 @@ class EditCaptureRuleActivity : AppCompatActivity() {
         } else {
             title = "添加捕获规则"
             binding.editTextThreshold.setText("0.9")
+            // (新增) 如果没有图片资源，禁用保存按钮
+            if (matchImageResources.isEmpty()) {
+                showToast("警告：没有任何可用的匹配图片！请先导入。")
+                binding.btnSave.isEnabled = false
+            }
         }
     }
 
     private fun setupImageSpinner() {
-        matchImageResources = getDrawableResourcesByPrefix("match_")
-        val displayNames = matchImageResources.map { it.first }
+        // (已修改) 从 ResourceManager 获取所有可用图片
+        matchImageResources = resourceManager.getAvailableImages("match_")
+        // (已修改) 格式化资源名称用于显示
+        val displayNames = matchImageResources.map { formatResourceName(it) }
+
         imageSpinnerAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, displayNames)
         imageSpinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         binding.spinnerMatchImage.adapter = imageSpinnerAdapter
-        if (matchImageResources.isEmpty()) {
-            showToast("警告：未找到任何以 'match_' 开头的图片资源！")
-            binding.btnSave.isEnabled = false
-        }
     }
 
     private fun setupClickListeners() {
         binding.btnSave.setOnClickListener { saveRule() }
         binding.btnPreviewCaptureArea.setOnClickListener { previewCaptureArea() }
+        // (新增) 导入按钮的点击事件
+        binding.btnImportMatchImage.setOnClickListener {
+            importImageLauncher.launch("image/*")
+        }
     }
 
     private fun previewCaptureArea() {
@@ -76,7 +110,7 @@ class EditCaptureRuleActivity : AppCompatActivity() {
         floatingWindowManager.showPreviewArea(previewId, area)
         Handler(Looper.getMainLooper()).postDelayed({
             floatingWindowManager.removeView(previewId)
-        }, 2000)
+        }, 8000)
     }
 
     private fun loadRuleData() {
@@ -88,10 +122,12 @@ class EditCaptureRuleActivity : AppCompatActivity() {
         binding.editTextWidth.setText(rule.captureArea.width().toString())
         binding.editTextHeight.setText(rule.captureArea.height().toString())
 
-        val resourceName = getResourceNameById(rule.matchImageResId)
-        val position = matchImageResources.indexOfFirst { it.second == resourceName }
+        // (已修改) 根据 ResourceIdentifier 找到对应的位置
+        val position = matchImageResources.indexOf(rule.matchImage)
         if (position != -1) {
             binding.spinnerMatchImage.setSelection(position)
+        } else {
+            showToast("警告：规则引用的图片资源丢失！")
         }
 
         binding.editTextThreshold.setText(rule.matchThreshold.toString())
@@ -117,14 +153,14 @@ class EditCaptureRuleActivity : AppCompatActivity() {
             showToast("请选择一张匹配图片"); return
         }
 
-        val selectedImageResource = matchImageResources[binding.spinnerMatchImage.selectedItemPosition]
-        val imageResId = getResourceIdByName(selectedImageResource.second, "drawable")
+        // (已修改) 获取选中的 ResourceIdentifier
+        val selectedImageIdentifier = matchImageResources[binding.spinnerMatchImage.selectedItemPosition]
 
         val ruleToSave = CaptureRule(
             id = currentRuleId ?: UUID.randomUUID().toString(),
             name = name,
             captureArea = Rect(x, y, x + width, y + height),
-            matchImageResId = imageResId,
+            matchImage = selectedImageIdentifier, // 保存 ResourceIdentifier
             matchThreshold = threshold
         )
 
@@ -139,9 +175,14 @@ class EditCaptureRuleActivity : AppCompatActivity() {
         floatingWindowManager.removeAllViews()
     }
 
-    private fun getDrawableResourcesByPrefix(prefix: String): List<Pair<String, String>> = R.drawable::class.java.fields.map { it.name }.filter { it.startsWith(prefix) }.map { it.removePrefix(prefix) to it }
-    private fun getResourceIdByName(name: String, type: String): Int = resources.getIdentifier(name, type, packageName)
-    private fun getResourceNameById(resId: Int): String = if (resId != 0) resources.getResourceEntryName(resId) else ""
+    // (新增) 格式化资源名称，方便在 Spinner 中显示
+    private fun formatResourceName(identifier: ResourceIdentifier): String {
+        return when (identifier.type) {
+            ResourceType.BUILT_IN -> "[内置] ${identifier.path.removePrefix("match_")}"
+            ResourceType.USER -> "[用户] ${identifier.path}"
+        }
+    }
+
     private fun showToast(message: String) { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
 
     companion object {

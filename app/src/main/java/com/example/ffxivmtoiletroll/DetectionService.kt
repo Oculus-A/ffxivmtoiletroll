@@ -8,7 +8,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.PixelFormat
 import android.hardware.display.VirtualDisplay
 import android.media.Image
@@ -40,6 +39,8 @@ class DetectionService : Service() {
     private var screenDensity: Int = 0
     private var detectionInterval = 1000L
 
+    // (新增) 初始化所有需要的管理器
+    private lateinit var resourceManager: ResourceManager
     private lateinit var floatingWindowManager: FloatingWindowManager
     private lateinit var soundPlayer: SoundPlayer
 
@@ -64,13 +65,14 @@ class DetectionService : Service() {
         repository = RuleRepository(this)
         createNotificationChannel()
 
+        // (新增) 初始化 ResourceManager 和其他依赖它的管理器
+        resourceManager = ResourceManager(this)
         floatingWindowManager = FloatingWindowManager(this)
         soundPlayer = SoundPlayer(this)
 
-        val fields = R.raw::class.java.fields
-        for (field in fields) {
-            try { soundPlayer.loadSound(field.getInt(null)) } catch (e: Exception) { }
-        }
+        // (已修改) 服务创建时，预加载所有已知音效，包括用户导入的
+        val allSounds = resourceManager.getAvailableSounds()
+        allSounds.forEach { soundPlayer.loadSound(it) }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -99,6 +101,7 @@ class DetectionService : Service() {
             val currentCycleCaptureStates = mutableMapOf<String, Boolean>()
             for (rule in captureRules) {
                 if (!isCaptureAreaValid(rule.captureArea)) continue
+                // (已修改) matchImage 现在内部使用 ResourceManager
                 val isMatched = matchImage(screenBitmap, rule)
                 currentCycleCaptureStates[rule.id] = isMatched
             }
@@ -110,6 +113,7 @@ class DetectionService : Service() {
 
                 if (isRuleActive && !previousState) {
                     Log.i(TAG, ">>> 行动规则 '${rule.name}' 已触发！")
+                    // (已修改) executeActions 现在传递 ResourceIdentifier
                     executeActions(rule.actions)
                 } else if (!isRuleActive && previousState) {
                     Log.i(TAG, "<<< 行动规则 '${rule.name}' 已结束！")
@@ -146,15 +150,16 @@ class DetectionService : Service() {
         }
     }
 
+    // (已修改) 使用新的 Action 定义来调用对应的方法
     private fun executeActions(actions: List<Action>) {
         for (action in actions) {
             when (action) {
                 is Action.ShowImage -> {
                     val details = action.details
-                    floatingWindowManager.showImage(details.id, details.imageResId, details.positionX, details.positionY)
+                    floatingWindowManager.showImage(details.id, details.image, details.positionX, details.positionY)
                 }
                 is Action.PlaySound -> {
-                    soundPlayer.playSound(action.details.soundResId)
+                    soundPlayer.playSound(action.details.sound)
                 }
             }
         }
@@ -217,6 +222,7 @@ class DetectionService : Service() {
                 area.width() > 0 && area.height() > 0
     }
 
+    // (已修改) 使用 ResourceManager 加载模板图片进行匹配
     private fun matchImage(screenBitmap: Bitmap, rule: CaptureRule): Boolean {
         var croppedBitmap: Bitmap? = null
         var templateBitmap: Bitmap? = null
@@ -227,7 +233,15 @@ class DetectionService : Service() {
 
         try {
             croppedBitmap = Bitmap.createBitmap(screenBitmap, rule.captureArea.left, rule.captureArea.top, rule.captureArea.width(), rule.captureArea.height())
-            templateBitmap = BitmapFactory.decodeResource(resources, rule.matchImageResId)
+
+            // (已修改) 从 ResourceManager 加载模板图片
+            templateBitmap = resourceManager.loadBitmap(rule.matchImage)
+
+            if (templateBitmap == null) {
+                Log.e(TAG, "无法加载模板图片: ${rule.matchImage.path}")
+                return false
+            }
+
             Utils.bitmapToMat(croppedBitmap, screenMat)
             Utils.bitmapToMat(templateBitmap, templateMat)
             Imgproc.cvtColor(screenMat, screenMat, Imgproc.COLOR_RGBA2RGB)

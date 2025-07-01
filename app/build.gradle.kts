@@ -11,10 +11,19 @@ android {
         applicationId = "com.example.ffxivmtoiletroll"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file(System.getenv("MYAPP_RELEASE_STORE_FILE") ?: property("MYAPP_RELEASE_STORE_FILE") as String)
+            storePassword = System.getenv("MYAPP_RELEASE_STORE_PASSWORD") ?: property("MYAPP_RELEASE_STORE_PASSWORD") as String
+            keyAlias = System.getenv("MYAPP_RELEASE_KEY_ALIAS") ?: property("MYAPP_RELEASE_KEY_ALIAS") as String
+            keyPassword = System.getenv("MYAPP_RELEASE_KEY_PASSWORD") ?: property("MYAPP_RELEASE_KEY_PASSWORD") as String
+        }
     }
 
     buildTypes {
@@ -24,6 +33,8 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

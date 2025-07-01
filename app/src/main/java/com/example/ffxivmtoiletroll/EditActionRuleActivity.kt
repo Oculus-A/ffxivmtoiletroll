@@ -1,5 +1,6 @@
 package com.example.ffxivmtoiletroll
 import android.app.AlertDialog
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -9,10 +10,10 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.Spinner
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.switchmaterial.SwitchMaterial
-import com.example.ffxivmtoiletroll.R
 import com.example.ffxivmtoiletroll.databinding.ActivityEditActionRuleBinding
 
 class EditActionRuleActivity : AppCompatActivity() {
@@ -27,8 +28,30 @@ class EditActionRuleActivity : AppCompatActivity() {
     private val tempConditions = mutableListOf<Condition>()
     private val tempActions = mutableListOf<Action>()
 
+    // (新增) 资源管理器
+    private lateinit var resourceManager: ResourceManager
     private lateinit var soundPlayer: SoundPlayer
     private lateinit var floatingWindowManager: FloatingWindowManager
+
+    // (新增) 用于刷新对话框中 Spinner 的回调
+    private var refreshDialogSpinner: (() -> Unit)? = null
+
+    // (新增) 文件选择器启动器
+    private val importImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { handleImportResult(it, "image") }
+    private val importSoundLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { handleImportResult(it, "sound") }
+
+    private fun handleImportResult(uri: Uri?, type: String) {
+        uri?.let {
+            val fileName = resourceManager.importResource(it, type)
+            if (fileName != null) {
+                showToast("资源导入成功: $fileName")
+                // 刷新打开的对话框中的 Spinner
+                refreshDialogSpinner?.invoke()
+            } else {
+                showToast("资源导入失败")
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +59,7 @@ class EditActionRuleActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         repository = RuleRepository(this)
+        resourceManager = ResourceManager(this)
         soundPlayer = SoundPlayer(this)
         floatingWindowManager = FloatingWindowManager(this)
 
@@ -84,7 +108,8 @@ class EditActionRuleActivity : AppCompatActivity() {
         }
 
         actionAdapter = ActionAdapter(tempActions,
-            getResourceNameById = { resId, type -> getResourceNameById(resId) },
+            // (已修改) 传递 resourceManager 以便检查资源是否存在
+            resourceManager,
             onItemClick = { action ->
                 when(action) {
                     is Action.ShowImage -> showImageActionDialog(action)
@@ -154,24 +179,41 @@ class EditActionRuleActivity : AppCompatActivity() {
     }
 
     private fun showImageActionDialog(actionToEdit: Action.ShowImage?) {
-        val imageNames = getDrawableResourcesByPrefix("display_").map { it.removePrefix("display_") }
-        if (imageNames.isEmpty()) { showToast("请先在drawable中添加以 'display_' 为前缀的图片"); return }
-
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_show_image_action, null)
         val spinner = dialogView.findViewById<Spinner>(R.id.spinnerDisplayImages)
         val posX = dialogView.findViewById<EditText>(R.id.editTextPositionX)
         val posY = dialogView.findViewById<EditText>(R.id.editTextPositionY)
         val previewBtn = dialogView.findViewById<Button>(R.id.btnPreviewImage)
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, imageNames)
+        val importBtn = dialogView.findViewById<Button>(R.id.btnImportDisplayImage) // (新增)
+
+        var availableImages: List<ResourceIdentifier> = emptyList()
+
+        val setupSpinner = {
+            availableImages = resourceManager.getAvailableImages("display_")
+            val displayNames = availableImages.map { formatResourceName(it, "display_") }
+            spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, displayNames)
+
+            if (actionToEdit != null) {
+                val index = availableImages.indexOf(actionToEdit.details.image)
+                if (index != -1) spinner.setSelection(index)
+            }
+        }
+
+        setupSpinner()
+        refreshDialogSpinner = {
+            // 重新设置 Spinner 内容并恢复之前的选择
+            val selectedItem = spinner.selectedItemPosition
+            setupSpinner()
+            spinner.setSelection(selectedItem.coerceAtMost(spinner.adapter.count -1))
+        }
+
+        importBtn.setOnClickListener { importImageLauncher.launch("image/*") }
 
         val isEditing = actionToEdit != null
         val dialogTitle = if (isEditing) "编辑显示图片动作" else "配置显示图片动作"
 
         if (isEditing) {
             val details = actionToEdit!!.details
-            val resName = getResourceNameById(details.imageResId).removePrefix("display_")
-            val index = imageNames.indexOf(resName)
-            if (index != -1) spinner.setSelection(index)
             posX.setText(details.positionX.toString())
             posY.setText(details.positionY.toString())
         }
@@ -181,10 +223,11 @@ class EditActionRuleActivity : AppCompatActivity() {
             val y = posY.text.toString().toIntOrNull()
             if (x == null || y == null) { showToast("请输入有效的预览坐标"); return@setOnClickListener }
             if (spinner.selectedItemPosition < 0) return@setOnClickListener
-            val resId = getResourceIdByName("display_" + spinner.selectedItem.toString(), "drawable")
+
+            val selectedIdentifier = availableImages[spinner.selectedItemPosition]
             val previewId = "action_preview_image"
-            floatingWindowManager.showImage(previewId, resId, x, y)
-            Handler(Looper.getMainLooper()).postDelayed({ floatingWindowManager.removeView(previewId) }, 2000)
+            floatingWindowManager.showImage(previewId, selectedIdentifier, x, y)
+            Handler(Looper.getMainLooper()).postDelayed({ floatingWindowManager.removeView(previewId) }, 8000)
         }
 
         AlertDialog.Builder(this).setTitle(dialogTitle).setView(dialogView)
@@ -192,61 +235,78 @@ class EditActionRuleActivity : AppCompatActivity() {
                 if (spinner.selectedItemPosition < 0) return@setPositiveButton
                 val x = posX.text.toString().toIntOrNull() ?: 0
                 val y = posY.text.toString().toIntOrNull() ?: 0
-                val resId = getResourceIdByName("display_" + spinner.selectedItem.toString(), "drawable")
+                val selectedIdentifier = availableImages[spinner.selectedItemPosition]
 
                 if (isEditing) {
                     val index = tempActions.indexOf(actionToEdit)
-                    val newDetails = actionToEdit!!.details.copy(imageResId = resId, positionX = x, positionY = y)
+                    val newDetails = actionToEdit!!.details.copy(image = selectedIdentifier, positionX = x, positionY = y)
                     if(index != -1) tempActions[index] = Action.ShowImage(newDetails)
                 } else {
-                    val newAction = Action.ShowImage(ShowImageAction(imageResId = resId, positionX = x, positionY = y))
+                    val newAction = Action.ShowImage(ShowImageAction(image = selectedIdentifier, positionX = x, positionY = y))
                     tempActions.add(newAction)
                 }
                 actionAdapter.updateData(tempActions)
             }
-            .setNegativeButton("取消", null).show()
+            .setNegativeButton("取消", null)
+            .setOnDismissListener { refreshDialogSpinner = null } // (新增) 对话框关闭时清除回调
+            .show()
     }
 
     private fun showSoundActionDialog(actionToEdit: Action.PlaySound?) {
-        val soundNames = getDrawableResourcesByPrefix("")
-        if (soundNames.isEmpty()) { showToast("请先在res/raw文件夹中添加音效文件"); return }
-
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_add_play_sound_action, null)
         val spinner = dialogView.findViewById<Spinner>(R.id.spinnerSoundFiles)
         val previewBtn = dialogView.findViewById<Button>(R.id.btnPreviewSound)
-        spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, soundNames)
+        val importBtn = dialogView.findViewById<Button>(R.id.btnImportSound) // (新增)
+
+        var availableSounds: List<ResourceIdentifier> = emptyList()
+
+        val setupSpinner = {
+            availableSounds = resourceManager.getAvailableSounds()
+            val displayNames = availableSounds.map { formatResourceName(it, "") }
+            spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, displayNames)
+
+            if (actionToEdit != null) {
+                val index = availableSounds.indexOf(actionToEdit.details.sound)
+                if (index != -1) spinner.setSelection(index)
+            }
+        }
+
+        setupSpinner()
+        refreshDialogSpinner = {
+            val selectedItem = spinner.selectedItemPosition
+            setupSpinner()
+            spinner.setSelection(selectedItem.coerceAtMost(spinner.adapter.count -1))
+        }
+
+        importBtn.setOnClickListener { importSoundLauncher.launch("audio/*") }
 
         val isEditing = actionToEdit != null
         val dialogTitle = if (isEditing) "编辑播放音效动作" else "配置播放音效动作"
 
-        if(isEditing) {
-            val resName = getResourceNameById(actionToEdit!!.details.soundResId)
-            val index = soundNames.indexOf(resName)
-            if(index != -1) spinner.setSelection(index)
-        }
-
         previewBtn.setOnClickListener {
             if (spinner.selectedItemPosition < 0) return@setOnClickListener
-            val resId = getResourceIdByName(spinner.selectedItem.toString(), "raw")
-            soundPlayer.playSound(resId)
+            val selectedIdentifier = availableSounds[spinner.selectedItemPosition]
+            soundPlayer.playSound(selectedIdentifier)
         }
 
         AlertDialog.Builder(this).setTitle(dialogTitle).setView(dialogView)
             .setPositiveButton(if(isEditing) "保存" else "添加") { _, _ ->
                 if (spinner.selectedItemPosition < 0) return@setPositiveButton
-                val resId = getResourceIdByName(spinner.selectedItem.toString(), "raw")
+                val selectedIdentifier = availableSounds[spinner.selectedItemPosition]
 
                 if(isEditing) {
                     val index = tempActions.indexOf(actionToEdit)
-                    val newDetails = actionToEdit!!.details.copy(soundResId = resId)
+                    val newDetails = actionToEdit!!.details.copy(sound = selectedIdentifier)
                     if(index != -1) tempActions[index] = Action.PlaySound(newDetails)
                 } else {
-                    val newAction = Action.PlaySound(PlaySoundAction(soundResId = resId))
+                    val newAction = Action.PlaySound(PlaySoundAction(sound = selectedIdentifier))
                     tempActions.add(newAction)
                 }
                 actionAdapter.updateData(tempActions)
             }
-            .setNegativeButton("取消", null).show()
+            .setNegativeButton("取消", null)
+            .setOnDismissListener { refreshDialogSpinner = null } // (新增)
+            .show()
     }
 
     private fun saveRule() {
@@ -271,9 +331,16 @@ class EditActionRuleActivity : AppCompatActivity() {
         floatingWindowManager.removeAllViews()
     }
 
-    private fun getDrawableResourcesByPrefix(prefix: String): List<String> = if(prefix == "") R.raw::class.java.fields.map { it.name } else R.drawable::class.java.fields.map { it.name }.filter { it.startsWith(prefix) }
-    private fun getResourceIdByName(name: String, type: String): Int = resources.getIdentifier(name, type, packageName)
-    private fun getResourceNameById(resId: Int): String = if (resId != 0) resources.getResourceEntryName(resId) else ""
+    // (新增) 统一的资源名称格式化方法
+    private fun formatResourceName(identifier: ResourceIdentifier, prefix: String): String {
+        val typeStr = when (identifier.type) {
+            ResourceType.BUILT_IN -> "[内置]"
+            ResourceType.USER -> "[用户]"
+        }
+        val name = if (prefix.isNotEmpty()) identifier.path.removePrefix(prefix) else identifier.path
+        return "$typeStr $name"
+    }
+
     private fun showToast(message: String) { Toast.makeText(this, message, Toast.LENGTH_SHORT).show() }
     private fun showDeleteDialog(title: String, message: String, onConfirm: () -> Unit) {
         AlertDialog.Builder(this).setTitle(title).setMessage(message)
